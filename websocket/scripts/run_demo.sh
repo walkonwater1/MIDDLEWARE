@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-#  run_demo.sh — 一键运行 WebSocket 机器人遥测 Demo
+#  run_demo.sh — 一键运行 WebSocket 信令 + 数据流 Demo
 #
 #  用法:
 #    bash scripts/run_demo.sh              # 自动编译 + 服务端(后台) + 客户端(前台)
@@ -99,12 +99,11 @@ run_server() {
         do_build
     fi
 
-    title "WebSocket 机器人遥测 — 服务端"
+    title "WebSocket 信令服务 — 服务端"
     echo ""
-    echo "  浏览器测试: 打开 DevTools Console 输入:"
-    echo "    ws = new WebSocket('ws://localhost:$WS_PORT')"
-    echo "    ws.onmessage = e => console.log(JSON.parse(e.data))"
-    echo "    ws.send('status')"
+    echo "  协议: 通用信封 {\"event\":\"...\", \"session_id\":\"...\", ...}"
+    echo "  事件: session_init → session_ready → stream_begin → ..."
+    echo "  特性: 会话管理、事件路由、数据处理模拟"
     echo ""
     exec "$SERVER_BIN" "$WS_PORT"
 }
@@ -118,7 +117,9 @@ run_client() {
         do_build
     fi
 
-    title "WebSocket 机器人遥测 — 客户端"
+    title "WebSocket 信令客户端 — 完整链路演示"
+    echo ""
+    echo "  链路: WS信令握手 → 数据推流 → 处理结果 → 数据拉流"
     echo ""
     exec "$CLIENT_BIN" "ws://$WS_HOST:$WS_PORT"
 }
@@ -144,7 +145,7 @@ run_all() {
     trap cleanup EXIT INT TERM
 
     # 启动服务端 (后台)
-    info "启动 WebSocket Server (后台, port=$WS_PORT)..."
+    info "启动 WebSocket 信令服务 (后台, port=$WS_PORT)..."
     "$SERVER_BIN" "$WS_PORT" &
     SVC_PID=$!
     sleep 1
@@ -157,7 +158,7 @@ run_all() {
 
     # 启动客户端 (前台)
     echo ""
-    info "启动 WebSocket Client (前台, Ctrl+C 退出)..."
+    info "启动 WebSocket 客户端 (前台, Ctrl+C 退出)..."
     echo ""
     "$CLIENT_BIN" "ws://$WS_HOST:$WS_PORT"
 
@@ -187,12 +188,9 @@ print_usage() {
     echo "  bash scripts/run_demo.sh server          # 仅服务端"
     echo "  WS_PORT=8080 bash scripts/run_demo.sh    # 自定义端口"
     echo ""
-    echo "浏览器测试:"
-    echo "  服务端启动后, 打开浏览器 DevTools Console:"
-    echo "    ws = new WebSocket('ws://localhost:9002')"
-    echo "    ws.onmessage = e => console.log(JSON.parse(e.data))"
-    echo "    ws.send('status')"
-    echo "    ws.send('echo')"
+    echo "协议说明:"
+    echo "  所有消息使用通用信封格式，事件名已脱敏处理。"
+    echo "  详见 README.md 中的协议文档。"
 }
 
 # ============================================================
