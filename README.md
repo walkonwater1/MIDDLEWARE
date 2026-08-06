@@ -1,5 +1,7 @@
 # 通信中间件学习
 
+**C++17 / C11 / Python | CMake 3.10+ | MIT License**
+
 > 车载与机器人通讯中间件学习仓库 — 11 种中间件覆盖从底层 IPC 到云端 IoT、从 Web 实时通信到云原生 RPC 的完整通信技术栈
 
 ## 动机
@@ -44,7 +46,7 @@
 |--------|------|---------|------|
 | **[ROS2](./ros2/)** | 机器人操作系统通信层 | Pub/Sub + Service + Action | C++ (rclcpp) |
 
-**ROS2** — 建立在 DDS 之上的机器人集成框架。16 个 Lab 覆盖 Topic/Service/Action/QoS，延伸到 TF2 坐标变换、Rosbag2 录制回放、Loan Message 零拷贝、多机自动发现、DDS 供应商切换、MQTT 桥接。`dds_bridge` 验证 ROS2 底层即 DDS。
+**ROS2** — 建立在 DDS 之上的机器人集成框架。15 个 Lab 覆盖 Topic/Service/Action/QoS，延伸到 TF2 坐标变换、Rosbag2 录制回放、Loan Message 零拷贝、多机自动发现、DDS 供应商切换、MQTT 桥接。`dds_bridge` 验证 ROS2 底层即 DDS。
 
 ### 进程间通信 (IPC)
 
@@ -207,6 +209,16 @@ cd websocket && mkdir -p build && cd build && cmake .. && make -j$(nproc)
 - GCC/G++ (C11/C++17)
 - ROS2 Humble (仅 `ros2/` 需要)
 - 各子目录 README 中包含详细依赖说明和运行命令
+
+## 项目关联
+
+本仓库为 [eir/lixin](.) workspace 的通信知识基础，其他项目中的通信方案均可在此找到 Demo 参考：
+
+| 项目 | 使用的中间件 | 说明 |
+|------|------------|------|
+| [GATEWAY-MULTI-AGENT](../GATEWAY-MULTI-AGENT/) | MQTT | Python MQTT 客户端 → Bridge → ROS2 → 机器人 |
+| [ASR-LLM-TTS](../ASR-LLM-TTS/) | WebSocket, MQTT | WebSocket 音频推流 + MQTT 状态上报 |
+| [RTSP-MTX-SERVER](../RTSP-MTX-SERVER/) | WebSocket, RTSP | WebSocket 信令 + RTSP 媒体流 + 飞书 Webhook |
 
 ## 许可证
 
