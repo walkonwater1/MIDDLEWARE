@@ -346,6 +346,25 @@ mosquitto_sub -t "ros2/data"                    # 查看 ROS2→MQTT 数据
 ros2 topic echo /mqtt_cmd                       # 查看 MQTT→ROS2 数据
 ```
 
+### 换到非 DDS 传输: zenoh_lab
+
+`dds_vendor_lab` 只在 DDS 家族内部换供应商 (FastDDS ⇄ CycloneDDS),两者靠 RTPS 线协议互通。
+RMW 抽象层还能换到**根本不是 DDS** 的传输 —— 见仓库根目录的 [`../zenoh/`](../zenoh/):
+
+```bash
+# 换 RMW: 整条传输栈变成 Zenoh
+ros2 run rmw_zenoh_cpp rmw_zenohd                # 先起 zenoh 路由器
+RMW_IMPLEMENTATION=rmw_zenoh_cpp ros2 run ros2_zenoh_lab rmw_probe_node --ros-args -p mode:=pub
+
+# 或挂桥接: DDS 侧零改动, 把 ROS2 图桥进 zenoh 网络
+bash ../zenoh/scripts/run_demo.sh bridge
+```
+
+注意: 这两种方式**互不通**,隔着两层墙 —— Humble 上 `rmw_zenoh_cpp` 内置 zenoh-c 1.8.0,
+而 `zenoh_bridge_dds` 还是 zenoh 0.5.x 那一代,桥接器连它的路由器会直接核心转储;
+即使能握手,两者的键表达式命名空间也没有交集。
+详见 [`../zenoh/README.md`](../zenoh/README.md)。
+
 ## 进阶学习方向
 
 - [x] DDS ↔ ROS2 桥接 (同进程 CycloneDDS + rclcpp) — `dds_bridge`

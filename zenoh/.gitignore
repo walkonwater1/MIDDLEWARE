@@ -1,0 +1,7 @@
+# colcon 工作区产物 (zenoh/ 是独立工作区)
+build/
+install/
+log/
+
+# 运行时日志
+run_logs/

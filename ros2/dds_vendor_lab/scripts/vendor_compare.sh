@@ -15,7 +15,9 @@ if ! dpkg -l | grep -q "ros-humble-rmw-cyclonedds-cpp"; then
 fi
 
 source /opt/ros/humble/setup.bash
-source /home/lixin/eir/lixin/midlleware/ros2/install/setup.bash 2>/dev/null || true
+# 相对本脚本定位 ros2/ 工作区: scripts/ → dds_vendor_lab/ → ros2/
+WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$WS/install/setup.bash" 2>/dev/null || true
 
 # --------------------------------------------------
 # 列出可用的 RMW 实现

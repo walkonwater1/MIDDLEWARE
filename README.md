@@ -2,7 +2,7 @@
 
 **C++17 / C11 / Python | CMake 3.10+ | MIT License**
 
-> 车载与机器人通讯中间件学习仓库 — 11 种中间件覆盖从底层 IPC 到云端 IoT、从 Web 实时通信到云原生 RPC 的完整通信技术栈
+> 车载与机器人通讯中间件学习仓库 — 12 种中间件覆盖从底层 IPC 到云端 IoT、从 Web 实时通信到云原生 RPC 的完整通信技术栈
 
 ## 动机
 
@@ -45,8 +45,11 @@
 | 中间件 | 定位 | 通信模式 | 语言 |
 |--------|------|---------|------|
 | **[ROS2](./ros2/)** | 机器人操作系统通信层 | Pub/Sub + Service + Action | C++ (rclcpp) |
+| **[Zenoh](./zenoh/)** | ROS2 的非 DDS 传输 | Key-Expression Pub/Sub + Query | C++ (rmw_zenoh / 桥接器) |
 
 **ROS2** — 建立在 DDS 之上的机器人集成框架。15 个 Lab 覆盖 Topic/Service/Action/QoS，延伸到 TF2 坐标变换、Rosbag2 录制回放、Loan Message 零拷贝、多机自动发现、DDS 供应商切换、MQTT 桥接。`dds_bridge` 验证 ROS2 底层即 DDS。
+
+**Zenoh** — 把 ROS2 从局域网里放出来。DDS 靠 UDP 组播发现，跨不了网段、过不了 NAT；Zenoh 只要一条到对端的 TCP 就能互联。两种接入方式：**换 RMW**（`rmw_zenoh_cpp`，整条传输栈不再是 DDS）与**挂桥接**（`zenoh_bridge_dds`，DDS 侧零改动，只把边界那一段桥出去）。四个 Demo 覆盖 RMW 切换、REST 可观测的桥接、跨域机器人↔云链路，以及**两种方式不可互通**这一必须知道的前提 —— Humble 上两者内置的 zenoh 差一个大版本（1.8.0 vs 0.5.x），桥接器连路由器会直接核心转储，且键表达式命名空间也没有交集。
 
 ### 进程间通信 (IPC)
 
@@ -94,6 +97,7 @@
 | ECU 间远程方法调用 (诊断/自检) | gRPC | IDL 类型安全、HTTP/2 多路复用、双向流 |
 | 机器人 Web 仪表盘实时监控 | WebSocket | 浏览器原生支持、全双工、低开销帧 |
 | 车辆远程监控/OTA | MQTT | 穿透防火墙、低带宽、QoS 分级 |
+| 机器人跨网段/跨云通信 (NAT/5G) | Zenoh | 主动连接取代组播发现、Key-Expression 命名空间、可穿 NAT |
 
 ## 目录结构
 
@@ -110,6 +114,7 @@ middleware/
 ├── gdbus/                 # GDBus/D-Bus Linux IPC
 ├── websocket/             # WebSocket 全双工 Web 通信 (多客户端广播 + 命令分发)
 ├── mqtt/                  # MQTT IoT 协议 (CAN→Protobuf→MQTT v3/v5/GB32960)
+├── zenoh/                 # Eclipse Zenoh 云边总线 (rmw_zenoh + DDS↔Zenoh 桥接)
 └── README.md
 ```
 
@@ -120,7 +125,7 @@ middleware/
 1. **IPC 基础** → `shm/` (零拷贝 + 无锁队列) → `zmq/` (5 种通信模式) → `gdbus/` (系统 IPC)
 2. **实时总线** → `canopen/` (CAN 应用层, 完整 SDO) → `ethercat/` (工业以太网, 数据报协议)
 3. **车载 SOA** → `someip/` (AUTOSAR Method/Event/Field) → `dds/` (去中心化 Pub/Sub)
-4. **机器人集成** → `ros2/` (DDS 之上的完整框架，16 Lab)
+4. **机器人集成** → `ros2/` (DDS 之上的完整框架，16 Lab) → `zenoh/` (把 ROS2 接出局域网: 换 RMW + 跨网桥接)
 5. **云边通信** → `mqtt/` (CAN→云端全链路) → `websocket/` (Web 实时遥测)
 6. **微服务 RPC** → `grpc/` (IDL+HTTP/2 多模式 RPC)
 
@@ -141,6 +146,11 @@ bash shm/scripts/run_demo.sh ringbuf        # 共享内存: SPSC 环形缓冲区
 bash shm/scripts/run_demo.sh lockfree       # 共享内存: MPMC 无锁队列
 bash zmq/scripts/run_demo.sh all            # ZeroMQ: 依次运行全部 5 种模式
 bash zmq/scripts/run_demo.sh push_pull      # ZeroMQ: PUSH/PULL 负载均衡
+
+# 机器人 / 云边桥接
+bash zenoh/scripts/run_demo.sh all          # Zenoh: A 切换 → B 桥接 → C 跨域 → D 共存
+bash zenoh/scripts/run_demo.sh switch       # Zenoh: DDS ⇄ Zenoh 的 RMW 切换
+bash zenoh/scripts/run_demo.sh crossnet     # Zenoh: 机器人 domain 0 ⇄ 云 domain 1
 
 # Web / RPC
 bash grpc/scripts/run_demo.sh               # gRPC: 3 种 RPC 模式
@@ -169,6 +179,10 @@ cd ros2 && source /opt/ros/humble/setup.bash
 colcon build --packages-select topic_lab service_lab action_lab qos_lab \
   lifecycle_lab composition_lab param_lab launch_lab tf2_lab rosbag2_lab \
   loan_lab multimachine_lab dds_vendor_lab mqtt_lab dds_bridge
+
+# Zenoh            依赖: /opt/ros/humble/setup.bash + ros-humble-rmw-zenoh-cpp + ros-humble-zenoh-bridge-dds
+cd zenoh && source /opt/ros/humble/setup.bash
+colcon build --packages-select ros2_zenoh_lab
 
 # 共享内存         依赖: librt
 cd shm && mkdir -p build && cd build && cmake .. && make -j$(nproc)

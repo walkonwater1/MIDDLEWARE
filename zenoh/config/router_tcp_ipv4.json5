@@ -1,0 +1,38 @@
+/// ============================================================
+///  router_tcp_ipv4.json5 — 只监听 IPv4 的路由器配置 (回落用)
+///
+///  为什么需要这个文件:
+///    rmw_zenoh_cpp 0.1.9 自带的 DEFAULT_RMW_ZENOH_ROUTER_CONFIG.json5 让
+///    路由器监听 `tcp/[::]:7447` (IPv6 通配)。在没有 IPv6 的主机上,
+///    这一行预期会直接起不来, 报 "Address family not supported"。
+///
+///  ⚠️ 那个失败**本机没能复现** —— 开发这台机器在 lo 上有 ::1, IPv6 是可用的,
+///     默认配置一直跑得好好的。所以上面那条是**根据监听地址写的预期**,
+///     不是实测结论。这个文件的价值在于: 万一你在 IPv4-only 的板子上踩到,
+///     不用现查 zenoh 配置格式。本文件本身是**实测可加载**的:
+///     用它起路由器, 监听地址确认为 0.0.0.0:7447 (IPv4), 组播 scouting 正常开启。
+///
+///  用法:
+///    ZENOH_ROUTER_CONFIG_URI=/absolute/path/to/router_tcp_ipv4.json5 \
+///      /opt/ros/humble/lib/rmw_zenoh_cpp/rmw_zenohd
+///
+///  注意 ZENOH_ROUTER_CONFIG_URI 必须给**绝对路径**。
+/// ============================================================
+{
+  /// 节点角色: router (做发现与转发的中心)
+  mode: "router",
+
+  /// 只监听 IPv4 通配地址 —— 这是与默认配置唯一的区别
+  listen: {
+    endpoints: [
+      "tcp/0.0.0.0:7447",
+    ],
+  },
+
+  /// 允许组播 scouting, 方便同一网段里的 peer/节点自己找过来
+  scouting: {
+    multicast: {
+      enabled: true,
+    },
+  },
+}

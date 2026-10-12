@@ -1,0 +1,48 @@
+/// ============================================================
+///  session_remote.json5 — 节点连到**远端**路由器的会话配置 (跨机模板)
+///
+///  本机 Demo 用不到这个文件: 默认 session 配置就指向 tcp/localhost:7447。
+///  跨机部署时才需要 —— 把下面的 192.168.1.100 换成机器人/边缘网关的 IP。
+///
+///  用法 (节点侧):
+///    export ZENOH_SESSION_CONFIG_URI=/absolute/path/to/session_remote.json5
+///    export RMW_IMPLEMENTATION=rmw_zenoh_cpp
+///    ros2 run <pkg> <node>
+///
+///  同一份文件可以被成千上万个节点共用 —— Zenoh 的价值就在这里:
+///  DDS 靠组播发现, 跨不了网段; Zenoh 只要有一条到路由器的 TCP 就够。
+///
+///  注意 ZENOH_SESSION_CONFIG_URI 必须给**绝对路径**。
+///
+///  已验证 (本机, zenoh 1.8.0):
+///    这份配置的 schema 确实被 zenoh 采纳, 不是被静默忽略。验证方法是
+///    把 connect 端点换成一个**非默认端口**(tcp/localhost:7500), 并在那里
+///    真起一个路由器 —— 节点随即连上, 不再报 "Unable to connect"。
+///    如果配置被忽略, 节点会回落到默认的 7447 而一直报错, 现象完全不同。
+/// ============================================================
+{
+  /// 节点以 peer 模式接入 (也可以写 "client": 更省资源, 但要路由器先在线)
+  mode: "peer",
+
+  /// 主动连到远端路由器 —— 改成你的机器人在的公网/内网地址
+  connect: {
+    endpoints: [
+      "tcp/192.168.1.100:7447",
+    ],
+  },
+
+  /// 本地监听一个随机端口, 便于同机其它节点直连过来
+  listen: {
+    endpoints: [
+      "tcp/localhost:0",
+    ],
+  },
+
+  /// 关掉组播 scouting: 跨网段场景里组播本来就不通,
+  /// 关掉可以少做无用功, 也避免误连到本地其它 zenoh 网络
+  scouting: {
+    multicast: {
+      enabled: false,
+    },
+  },
+}

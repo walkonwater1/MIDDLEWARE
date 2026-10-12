@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>ros2_zenoh_lab</name>
+  <version>0.1.0</version>
+  <description>ROS2 RMW 切换实验 — DDS / Zenoh 传输切换与自省节点</description>
+  <maintainer email="user@example.com">lixin</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>std_msgs</depend>
+  <depend>rmw_implementation</depend>
+
+  <!--
+    本包只依赖 ROS2 自带的 rclcpp/std_msgs/rmw_implementation, 不依赖 Zenoh 的头文件:
+    节点是 RMW 无关的, 换传输靠环境变量, 不靠链接不同的库。
+
+    运行期(非编译期)需要以下两个二进制包, 由 ../scripts/run_demo.sh deps 安装:
+      ros-humble-rmw-zenoh-cpp      → rmw_zenoh_cpp (RMW 实现) + rmw_zenohd (路由器)
+      ros-humble-zenoh-bridge-dds   → zenoh_bridge_dds (DDS ↔ Zenoh 桥接器)
+  -->
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

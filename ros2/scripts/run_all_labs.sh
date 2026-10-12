@@ -2,7 +2,10 @@
 # run_all_labs.sh — ROS2 实验一键启动菜单
 set -e
 
-WS="/home/lixin/eir/lixin/midlleware/ros2"
+# 两个工作区都相对本脚本定位 —— 这样整个仓库可以随便挪/换机器/换用户, 不用改脚本
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WS="$(cd "$SCRIPT_DIR/.." && pwd)"                 # ros2/     (本脚本所在工作区)
+ZENOH_DIR="$(cd "$SCRIPT_DIR/../../zenoh" && pwd)" # zenoh/    (与 ros2/ 平级的独立工作区)
 source /opt/ros/humble/setup.bash
 source "$WS/install/setup.bash" 2>/dev/null || true
 
@@ -27,10 +30,11 @@ show_menu() {
     echo "║ 14) mqtt       MQTT 桥接                 ║"
     echo "║ 15) dds_bridge DDS↔ROS2 桥接             ║"
     echo "║ 16) build      编译全部包                ║"
+    echo "║ 17) zenoh      Zenoh: DDS⇄Zenoh 切换/桥接║"
     echo "║  q) 退出                                ║"
     echo "╚══════════════════════════════════════════╝"
     echo ""
-    read -r -p "输入 [1-16/q]: " c
+    read -r -p "输入 [1-17/q]: " c
     case "$c" in
         1) echo "--- 基础 Topic ---"; ros2 run topic_lab basic_pub & sleep 1; ros2 run topic_lab basic_sub; pkill basic_pub ;;
         2) echo "--- Service ---"; ros2 run service_lab battery_server & sleep 1; timeout 10 ros2 run service_lab battery_client; pkill battery_server ;;
@@ -48,6 +52,9 @@ show_menu() {
         14) echo "--- MQTT ---"; timeout 10 ros2 run mqtt_lab ros2_mqtt_bridge ;;
         15) echo "--- DDS Bridge ---"; ros2 run dds_bridge dds_ros2_bridge ;;
         16) echo "--- Build All ---"; cd "$WS"; colcon build --packages-select topic_lab service_lab action_lab qos_lab lifecycle_lab composition_lab param_lab launch_lab tf2_lab rosbag2_lab loan_lab multimachine_lab dds_vendor_lab mqtt_lab dds_bridge ;;
+        17) echo "--- Zenoh (DDS ⇄ Zenoh 切换/桥接) ---"
+            read -r -p "  子命令 [switch/bridge/crossnet/mixed/all, 默认 all]: " z
+            bash "$ZENOH_DIR/scripts/run_demo.sh" "${z:-all}" ;;
         q) exit 0 ;;
     esac
 }
