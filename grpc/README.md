@@ -51,6 +51,9 @@ gRPC 支持四种模式，本 Demo 演示前三种：
 # 安装依赖 (仅首次)
 sudo apt-get install -y libgrpc++-dev protobuf-compiler-grpc
 
+# 只编译 (Debug / release / clean)
+bash scripts/build.sh release
+
 # 一键编译 + 运行 (服务端后台 + 客户端前台)
 bash scripts/run_demo.sh
 

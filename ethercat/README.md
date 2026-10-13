@@ -27,6 +27,22 @@ Ethernet Frame
 └─ FCS (CRC32)
 ```
 
+### 数据报命令 (Datagram)
+
+`ethercat.h` 定义了 EtherCAT 全部数据报命令，`ethercat.c` 的 `virtual_esc_process_frame()` 在从站侧逐条处理：
+
+| 命令 | 码 | 解析器处理 | 寻址方式 |
+|------|----|-----------|---------|
+| NOP | 0x00 | ✓ (恒成功) | — |
+| APRD / APWR | 0x01 / 0x02 | ✓ | 自增位置 |
+| FPRD / FPWR | 0x04 / 0x05 | ✓ | 固定地址 |
+| BRD / BWR | 0x07 / 0x08 | ✓ | 广播 |
+| LRD / LWR | 0x0A / 0x0B | ✓ | 逻辑寻址 (过程数据) |
+| APRW / FPRW / LRW | 0x03 / 0x06 / 0x0C | 仅枚举定义 | 读写合并 |
+| ARMW / FRMW | 0x0D / 0x0E | 仅枚举定义 | 多帧 (DC 时钟) |
+
+每次处理完在响应帧末尾追加 **WKC (Working Counter)**：成功处理的子操作数，主站据此校验数据报是否被从站真正读取/写入。主站每个周期构造一条帧，内含 **2 个数据报**：`LWR → SM2` (写 3 轴目标位置) 与 `LRD ← SM3` (读 3 轴实际位置)，响应里逐条取回 WKC 累加。
+
 ### "飞读飞写" (On-the-Fly)
 每个从站不存储整个帧，而是边接收边处理：
 - 读命令: 在数据流经时向指定位置插入数据
@@ -75,20 +91,26 @@ Init → Pre-Operational → Safe-Operational → Operational
 │  - CoE: 1C12/1C13 (SM分配), 1600/1A00 (PDO)  │
 └──────────────────────────────────────────────┘
 
-周期: 1kHz (1ms), 3 个伺服轴
-每个轴: 目标位置(I32) + 实际位置(I32) × 3 轴 = 24 字节输入 + 12 字节输出
+周期: 1kHz (1ms), 1 个从站 / 3 个伺服轴, 仿真运行 15 秒
+过程数据 (见 setup_slave_pdo):
+  TxPDO (从站→主站, SM3) = 3×I32 实际位置 + I16 状态字 = 14 字节  (0x1A00, 4 条目)
+  RxPDO (主站→从站, SM2) = 3×I32 目标位置              = 12 字节  (0x1600, 3 条目)
 ```
 
 ## 编译运行
 
 ```bash
-# 1. 依赖
+# 方式一: 一键脚本 (自动编译 + 从站后台 + 主站前台)
+cd ethercat && bash scripts/run_demo.sh both
+# 其他子命令: slave / master / build / clean
+```
+
+```bash
+# 方式二: 手动分步
 sudo apt install cmake gcc
 
-# 2. 编译
 cd ethercat && mkdir build && cd build && cmake .. && make
 
-# 3. 运行（两个终端）
 ./ethercat_slave    # 终端1: 启动虚拟从站
 ./ethercat_master   # 终端2: 启动主站
 ```
@@ -96,20 +118,47 @@ cd ethercat && mkdir build && cd build && cmake .. && make
 ## 预期输出
 
 ```
-[MASTER] Scanning bus...
-[MASTER] Found 1 slave(s)
-[MASTER] Slave #1: Vendor=0x00000002 Product=0x0652 (EL6521)
-[MASTER] Configuring PDO mapping...
-[MASTER]   TxPDO 0x1A00: 3 entries, 12 bytes
-[MASTER]   RxPDO 0x1600: 3 entries, 12 bytes
-[MASTER] DC sync config done (cycle=1000000 ns)
-[MASTER] State change: INIT → PREOP → SAFEOP → OP
+=== EtherCAT Virtual Slave #1 ===           ← 终端1
+Type: Beckhoff EL6521 (3-axis servo simulator)
+[SLAVE#1] ESC initialized
+[SLAVE#1] FMMU=8, SM=8, RAM=8KB
+[SLAVE#1] CoE Objects:
+          [1000] Device Type                    = 0x00020192
+          [1001] Error Register                 = 0x00000000
+          [1C00] Sync Manager Type count        = 0x00000004
+          [1C12] RxPDO Assign count             = 0x00000001
+          [1C13] TxPDO Assign count             = 0x00000001
+          [1600] RxPDO Map count                = 0x00000003
+          [1A00] TxPDO Map count                = 0x00000004
+[SLAVE#1] Waiting for master...
+  [ESC] 状态转换: INIT → PREOP
 
-[MASTER] | cycle | axis0_target | axis0_actual | axis1_target | axis1_actual | dc_diff(ns) |
-[MASTER] |   100 |         1024 |         1024 |         2048 |         2048 |         +52 |
-[MASTER] |   200 |         1124 |         1124 |         1948 |         1948 |         -31 |
+=== EtherCAT Master (SOEM-style) ===        ← 终端2
+[MASTER] Connected to slave via shared memory
+[MASTER] Initializing EtherCAT master...
+[MASTER] Configuring 1 slave(s)...
+[MASTER]   Slave #1: 0x00000002/0x06520000
+[MASTER] Mapping PDO for slave #1...
+[MASTER]   RxPDO: 12 bytes (SM2)
+[MASTER]   TxPDO: 14 bytes (SM3)
+[MASTER] Configuring Distributed Clock...
+[MASTER]   Sync0 cycle: 1000000 ns (1.00 kHz)
+[MASTER]   Sync0 shift: 1000000 ns
+[MASTER] Slave #1 → INIT
+[MASTER] Slave #1 → PREOP
+[MASTER] Slave #1 → SAFEOP
+[MASTER] CoE SDO Read 0x1C13 (TxPDO assign)...
+[MASTER] Slave #1 → OP
+
+[MASTER] Entering cyclic mode (1kHz)...
+[MASTER] ┌────────┬──────────┬──────────┬──────────┬──────────┬──────────┐
+[MASTER] │ cycle  │ axis0    │ axis1    │ axis2    │ wkc      │ dc_diff  │
+[MASTER] ├────────┼──────────┼──────────┼──────────┼──────────┼──────────┤
+[MASTER] │    100 │     1024 │     2048 │     3072 │ 0x0002   │      +52 │
+[MASTER] │    200 │     1124 │     1948 │     2960 │ 0x0002   │      -31 │
 ...
-[SLAVE#1] Status: OP | WKC=3 | DC drift=+12ns
+
+[SLAVE#1] State=OP | WKC=0x0002 | Pos=[1024, 2048, 3072]
 ```
 
 ## 与其它中间件的结合场景
@@ -125,9 +174,11 @@ cd ethercat && mkdir build && cd build && cmake .. && make
 
 | 文件 | 说明 |
 |------|------|
-| `ethercat.h` | ESC 寄存器定义、状态机、PDO 结构、DC 配置 |
-| `ethercat_slave.c` | 虚拟从站：ESC 模拟 / PDO 数据 / DC 时钟 |
-| `ethercat_master.c` | SOEM 风格主站：扫描 / 配置 / 同步 / 周期交换 |
+| `ethercat.h` | ESC 寄存器地址、数据报命令码、ESM 状态机、PDO 结构、DC 配置 |
+| `ethercat.c` | 共享核心：`virtual_esc_process_frame()` 数据报解析 + `ecx_coe_sdo_read/write()` CoE SDO |
+| `ethercat_slave.c` | 虚拟从站：ESC 寄存器模拟 / PDO 数据 / DC 时钟 / CoE 对象字典 |
+| `ethercat_master.c` | SOEM 风格主站：扫描 / 配置 / DC 同步 / 周期交换 / WKC 校验 / CoE 对象读取 |
+| `scripts/run_demo.sh` | 一键编译运行 (both / slave / master) |
 
 ## 进阶学习方向
 

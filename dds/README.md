@@ -26,6 +26,29 @@ mkdir build && cd build
 cmake .. && make -j$(nproc)
 ```
 
+## 一键脚本
+
+`scripts/` 下三个脚本覆盖全部实验：
+
+```bash
+# 车载实验: 交互菜单, 或直接指定子实验
+./scripts/run_vehicle_demo.sh                # 菜单
+./scripts/run_vehicle_demo.sh pubsub         # 基础发布/订阅
+./scripts/run_vehicle_demo.sh qos            # QoS 对比实验
+./scripts/run_vehicle_demo.sh discovery      # 3 进程自动发现
+./scripts/run_vehicle_demo.sh listener       # Listener 回调
+./scripts/run_vehicle_demo.sh partition      # Partition 隔离
+./scripts/run_vehicle_demo.sh --no-build ... # 跳过编译
+
+# 机器人中控: service + monitor (对标 EHR 项目状态机架构)
+./scripts/run_robot_demo.sh                  # 自动编译 + 启动
+./scripts/run_robot_demo.sh --service        # 只起服务端
+./scripts/run_robot_demo.sh --monitor        # 只起监控端
+
+# DDS Security: 生成 CA 根证书 / 节点证书 / governance.xml / permissions.xml
+./scripts/gen_security.sh
+```
+
 ## Demo 清单
 
 | 可执行文件 | 文件 | 学习点 |
