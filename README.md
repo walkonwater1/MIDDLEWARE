@@ -114,7 +114,7 @@ middleware/
 ├── gdbus/                 # GDBus/D-Bus Linux IPC (XML → 代码生成 → 只写业务逻辑)
 ├── websocket/             # WebSocket 信令 + 数据流 (手写 RFC 6455 客户端 + websocketpp 服务端)
 ├── mqtt/                  # MQTT 车载数据上报 (CAN 模拟/SocketCAN → Protobuf/JSON → v3/v5/GB32960)
-├── zenoh/                 # Eclipse Zenoh 云边总线 (原生 API + rmw_zenoh + DDS↔Zenoh 桥接)
+├── zenoh/                 # Eclipse Zenoh 云边总线 (原生 API + rmw_zenoh + DDS↔Zenoh 桥接 + 跨主机验证)
 └── README.md
 ```
 
@@ -156,6 +156,7 @@ bash zenoh/scripts/run_demo.sh all          # Zenoh: 0 原生 API → A 切换 �
 bash zenoh/scripts/run_native.sh pubsub     # Zenoh: 原生 zenoh-cpp 发布/订阅 (不涉及 ROS2)
 bash zenoh/scripts/run_demo.sh switch       # Zenoh: DDS ⇄ Zenoh 的 RMW 切换
 bash zenoh/scripts/run_demo.sh crossnet     # Zenoh: 机器人 domain 0 ⇄ 云 domain 1
+bash zenoh/cross_host/make_bundle.sh        # Zenoh: 打 aarch64 包, 验证 Ubuntu ⇄ H618/Armbian
 
 # 车联网 (交叉编译第三方库 → third-lib/)
 bash mqtt/scripts/build_deps.sh aarch64     # MQTT: paho-mqtt + protobuf-c

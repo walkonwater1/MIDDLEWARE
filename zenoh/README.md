@@ -102,7 +102,13 @@ zenoh/
 │       ├── z_pub.cpp                 发布端: Config → open → declare_publisher → put
 │       ├── z_sub.cpp                 订阅端: declare_subscriber + 回调
 │       ├── z_queryable.cpp           服务端: declare_queryable + query.reply
-│       └── z_get.cpp                 客户端: get 一次性查询, 收集有限条 reply
+│       ├── z_get.cpp                 客户端: get 一次性查询, 收集有限条 reply
+│       └── z_sysmon.cpp              采集端: 真实 CPU/内存/温度 → 三路 key 周期发布
+├── cross_host/                     # ★ 跨主机验证: Ubuntu ⇄ H618 (Armbian, aarch64)
+│   ├── README.md                     实测拓扑/结果/排坑
+│   ├── py_pub.py / py_sub.py / py_get.py   Python 版 Zenoh 程序
+│   ├── make_bundle.sh                Ubuntu 侧打 aarch64 离线包
+│   └── setup_box.sh                  盒子侧一键装 Python/C++ 环境
 ├── ros2_zenoh_lab/                 # ROS2 包 (★ zenoh/ 是一个独立 colcon 工作区)
 │   └── src/rmw_probe_node.cpp        RMW 无关的自省节点 (Demo A–D 全靠它)
 ├── scripts/
@@ -129,6 +135,9 @@ bash zenoh/scripts/run_demo.sh all
 
 # 只想看原生 Zenoh 用法 (独立 CMake 工程, 不需要 colcon):
 bash zenoh/scripts/run_native.sh all
+
+# 跨主机验证 (Ubuntu ⇄ H618/Armbian 盒子): 详见 zenoh/cross_host/README.md
+bash zenoh/cross_host/make_bundle.sh
 ```
 
 单个 Demo:
@@ -153,7 +162,7 @@ bash zenoh/scripts/run_demo.sh mixed      # D. 共存但不互通
 ## Demo 0 — 原生 Zenoh API:先跑通 Zenoh 本身
 
 Demo A–D 讲的都是"ROS2 怎么用 Zenoh"。如果你还没见过 Zenoh 程序长什么样,
-那些结论会有点悬空。这一节**完全脱离 ROS2** —— 用 zenoh-cpp 写四个小程序:
+那些结论会有点悬空。这一节**完全脱离 ROS2** —— 用 zenoh-cpp 写五个小程序:
 
 | 程序 | 演示的 Zenoh 概念 | 对应 DDS 里的东西 |
 |------|------------------|------------------|
@@ -161,6 +170,7 @@ Demo A–D 讲的都是"ROS2 怎么用 Zenoh"。如果你还没见过 Zenoh 程�
 | `z_sub` | `declare_subscriber` + 回调、key expression 通配 | Subscriber |
 | `z_queryable` | `declare_queryable` → `query.reply` | Service 的服务端 |
 | `z_get` | `get` 一次性查询,收集有限条 reply | Service 的客户端 |
+| `z_sysmon` | 读 `/proc`、`/sys`,把真实 CPU/内存/温度按 key 周期发布 | 设备侧采集上报 |
 
 > **不需要为这一节额外安装 Zenoh。** `libzenohc.so` 和 `zenoh.hxx` 已经随
 > `ros-humble-rmw-zenoh-cpp` 装在 `/opt/ros/humble/opt/zenoh_cpp_vendor`,

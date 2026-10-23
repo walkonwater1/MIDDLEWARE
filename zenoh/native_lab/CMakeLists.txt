@@ -26,9 +26,9 @@ target_include_directories(zenoh_native_common INTERFACE "${CMAKE_CURRENT_SOURCE
 target_compile_definitions(zenoh_native_common INTERFACE ZENOHCXX_ZENOHC)
 target_link_libraries(zenoh_native_common INTERFACE zenohc::lib)
 
-foreach(demo z_pub z_sub z_queryable z_get)
+foreach(demo z_pub z_sub z_queryable z_get z_sysmon)
   add_executable(${demo} src/${demo}.cpp)
   target_link_libraries(${demo} PRIVATE zenoh_native_common)
 endforeach()
 
-install(TARGETS z_pub z_sub z_queryable z_get DESTINATION lib/${PROJECT_NAME})
+install(TARGETS z_pub z_sub z_queryable z_get z_sysmon DESTINATION lib/${PROJECT_NAME})

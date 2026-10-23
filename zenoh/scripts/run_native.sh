@@ -82,7 +82,7 @@ do_build() {
         return 1
     }
     cmake --build "$NATIVE_BUILD" -j"$(nproc)" || return 1
-    info "编译完成: $NATIVE_BUILD/{z_pub,z_sub,z_queryable,z_get}"
+    info "编译完成: $NATIVE_BUILD/{z_pub,z_sub,z_queryable,z_get,z_sysmon}"
 }
 
 ensure_built() {

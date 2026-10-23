@@ -5,7 +5,7 @@
 
 完整说明与实测输出见 [../README.md](../README.md) 的 **Demo 0**。
 
-## 四个程序
+## 五个程序
 
 | 文件 | 演示 | 关键 API |
 |------|------|---------|
@@ -13,6 +13,24 @@
 | [z_sub.cpp](src/z_sub.cpp) | 订阅端 | `declare_subscriber(key, on_sample, on_drop)`,key expression 通配 |
 | [z_queryable.cpp](src/z_queryable.cpp) | 查询服务端 | `declare_queryable` → `query.reply` |
 | [z_get.cpp](src/z_get.cpp) | 查询客户端 | `get` + `FifoChannel`,收集有限条 reply |
+| [z_sysmon.cpp](src/z_sysmon.cpp) | **系统状态采集端** | 读 `/proc/stat`、`/proc/meminfo`、`/sys/class/thermal`,按周期发布三路 key |
+
+`z_sysmon` 是给 H618 这类设备节点用的真实采集程序(不是模拟值)。它每个采样点
+发布三条消息,共用同一个 `seq` 与 `ts_ns`,方便订阅端对齐与统计延迟:
+
+```
+h618/system/cpu          usage_pct / load1..15 / procs / uptime_s
+h618/system/memory       total_mb / available_mb / used_mb / usage_pct
+h618/system/temperature  max_c + 所有 thermal zone 的逐项温度
+```
+
+```bash
+./build/z_sysmon                               # 1 Hz 一直发
+./build/z_sysmon h618/system 1 10              # 采 10 个点
+./build/z_sysmon h618/system 1 0 tcp/192.168.10.1:7447   # client 模式
+```
+
+跨主机实测见 [../cross_host/README.md](../cross_host/README.md)。
 
 [common.hxx](src/common.hxx) 是公共小工具:统一打开 Session(peer / client)、
 Ctrl-C 退出、打印转义。**刻意没有封装 pub/sub/query 本身** —— 那几步是示例的主角。
