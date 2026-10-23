@@ -45,11 +45,11 @@
 | 中间件 | 定位 | 通信模式 | 语言 |
 |--------|------|---------|------|
 | **[ROS2](./ros2/)** | 机器人操作系统通信层 | Pub/Sub + Service + Action | C++ (rclcpp) |
-| **[Zenoh](./zenoh/)** | ROS2 的非 DDS 传输 | Key-Expression Pub/Sub + Query | C++ (rmw_zenoh / 桥接器) |
+| **[Zenoh](./zenoh/)** | ROS2 的非 DDS 传输 | Key-Expression Pub/Sub + Query | C++ (zenoh-cpp / rmw_zenoh / 桥接器) |
 
 **ROS2** — 建立在 DDS 之上的机器人集成框架。14 个 Lab 外加 `dds_bridge`，覆盖 Topic/Service/Action/QoS，延伸到 TF2 坐标变换、Rosbag2 录制回放、Loan Message 零拷贝、多机自动发现、DDS 供应商切换、MQTT 桥接。`dds_bridge` 在同一进程里同时调 CycloneDDS C API 与 rclcpp，验证 ROS2 底层即 DDS。
 
-**Zenoh** — 把 ROS2 从局域网里放出来。DDS 靠 UDP 组播发现，跨不了网段、过不了 NAT；Zenoh 只要一条到对端的 TCP 就能互联。两种接入方式：**换 RMW**（`rmw_zenoh_cpp`，整条传输栈不再是 DDS）与**挂桥接**（`zenoh_bridge_dds`，DDS 侧零改动，只把边界那一段桥出去）。四个 Demo 覆盖 RMW 切换、REST 可观测的桥接、跨域机器人↔云链路，以及**两种方式不可互通**这一必须知道的前提 —— Humble 上两者内置的 zenoh 差一个大版本（1.8.0 vs 0.5.x），桥接器连路由器会直接核心转储，且键表达式命名空间也没有交集。
+**Zenoh** — 把 ROS2 从局域网里放出来。DDS 靠 UDP 组播发现，跨不了网段、过不了 NAT；Zenoh 只要一条到对端的 TCP 就能互联。两种接入方式：**换 RMW**（`rmw_zenoh_cpp`，整条传输栈不再是 DDS）与**挂桥接**（`zenoh_bridge_dds`，DDS 侧零改动，只把边界那一段桥出去）。五个 Demo 覆盖**原生 Zenoh API 用法**（不涉及 ROS2）、RMW 切换、REST 可观测的桥接、跨域机器人↔云链路，以及**两种方式不可互通**这一必须知道的前提 —— Humble 上两者内置的 zenoh 差一个大版本（1.8.0 vs 0.5.x），桥接器连路由器会直接核心转储，且键表达式命名空间也没有交集。
 
 ### 进程间通信 (IPC)
 
@@ -114,7 +114,7 @@ middleware/
 ├── gdbus/                 # GDBus/D-Bus Linux IPC (XML → 代码生成 → 只写业务逻辑)
 ├── websocket/             # WebSocket 信令 + 数据流 (手写 RFC 6455 客户端 + websocketpp 服务端)
 ├── mqtt/                  # MQTT 车载数据上报 (CAN 模拟/SocketCAN → Protobuf/JSON → v3/v5/GB32960)
-├── zenoh/                 # Eclipse Zenoh 云边总线 (rmw_zenoh + DDS↔Zenoh 桥接)
+├── zenoh/                 # Eclipse Zenoh 云边总线 (原生 API + rmw_zenoh + DDS↔Zenoh 桥接)
 └── README.md
 ```
 
@@ -125,7 +125,7 @@ middleware/
 1. **IPC 基础** → `shm/` (零拷贝 + 无锁队列) → `zmq/` (5 种通信模式) → `gdbus/` (系统 IPC)
 2. **实时总线** → `canopen/` (CAN 应用层, 完整 SDO) → `ethercat/` (工业以太网, 数据报协议)
 3. **车载 SOA** → `someip/` (AUTOSAR Method/Event/Field) → `dds/` (去中心化 Pub/Sub)
-4. **机器人集成** → `ros2/` (DDS 之上的完整框架，14 Lab + dds_bridge) → `zenoh/` (把 ROS2 接出局域网: 换 RMW + 跨网桥接)
+4. **机器人集成** → `ros2/` (DDS 之上的完整框架，14 Lab + dds_bridge) → `zenoh/` (原生 API 用法 + 把 ROS2 接出局域网: 换 RMW + 跨网桥接)
 5. **云边通信** → `mqtt/` (CAN→云端全链路) → `websocket/` (信令 + 数据流双通道)
 6. **微服务 RPC** → `grpc/` (IDL+HTTP/2 多模式 RPC)
 
@@ -152,7 +152,8 @@ bash gdbus/scripts/run_demo.sh              # GDBus: 机器人服务 + 监控终
 
 # 机器人 / 云边桥接
 bash ros2/scripts/run_all_labs.sh           # ROS2: 14 个 Lab 交互菜单 (脚本自动 source ROS2)
-bash zenoh/scripts/run_demo.sh all          # Zenoh: A 切换 → B 桥接 → C 跨域 → D 共存
+bash zenoh/scripts/run_demo.sh all          # Zenoh: 0 原生 API → A 切换 → B 桥接 → C 跨域 → D 共存
+bash zenoh/scripts/run_native.sh pubsub     # Zenoh: 原生 zenoh-cpp 发布/订阅 (不涉及 ROS2)
 bash zenoh/scripts/run_demo.sh switch       # Zenoh: DDS ⇄ Zenoh 的 RMW 切换
 bash zenoh/scripts/run_demo.sh crossnet     # Zenoh: 机器人 domain 0 ⇄ 云 domain 1
 
@@ -190,6 +191,8 @@ colcon build --packages-select topic_lab service_lab action_lab qos_lab \
 # Zenoh            依赖: /opt/ros/humble/setup.bash + ros-humble-rmw-zenoh-cpp + ros-humble-zenoh-bridge-dds
 cd zenoh && source /opt/ros/humble/setup.bash
 colcon build --packages-select ros2_zenoh_lab
+# 原生 Zenoh 示例 (独立 CMake 工程, 复用 rmw_zenoh_cpp 自带的 libzenohc)
+cmake -S native_lab -B native_lab/build && cmake --build native_lab/build -j$(nproc)
 
 # 共享内存         依赖: librt
 cd shm && mkdir -p build && cd build && cmake .. && make -j$(nproc)

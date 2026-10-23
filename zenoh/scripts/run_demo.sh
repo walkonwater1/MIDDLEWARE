@@ -4,12 +4,13 @@
 #
 #  用法:
 #    bash scripts/run_demo.sh                # 默认 = switch
+#    bash scripts/run_demo.sh native         # 0. 原生 Zenoh API 用法 (不涉及 ROS2)
 #    bash scripts/run_demo.sh switch         # A. RMW 切换: FastDDS / CycloneDDS / Zenoh
 #    bash scripts/run_demo.sh bridge         # B. DDS ↔ Zenoh 桥接 (REST 可观测)
 #    bash scripts/run_demo.sh rest           # B'. 只起发布者+桥接器, 留给你手玩 REST
 #    bash scripts/run_demo.sh crossnet       # C. 跨域/跨网络桥接 (机器人 ⇄ 云)
 #    bash scripts/run_demo.sh mixed          # D. 两种接入方式共存但不互通
-#    bash scripts/run_demo.sh all            # 依次跑 A→B→C→D
+#    bash scripts/run_demo.sh all            # 依次跑 0→A→B→C→D
 #    bash scripts/run_demo.sh deps           # 安装两个 apt 包
 #    bash scripts/run_demo.sh build          # 仅 colcon 编译
 #    bash scripts/run_demo.sh clean          # 清理 build/install/log
@@ -684,10 +685,19 @@ EOF
 }
 
 # ============================================================
+# 0. 原生 Zenoh API (委托给 run_native.sh)
+# ============================================================
+demo_native() {
+    # 这一段不经过 ROS2, 也不受 RMW_IMPLEMENTATION 影响 —— 单独一个脚本
+    bash "$SCRIPT_DIR/run_native.sh" "${1:-all}"
+}
+
+# ============================================================
 # 全部
 # ============================================================
 run_all() {
     # 单段失败 (多半是依赖没装) 不该打断整轮
+    demo_native   || warn "0 段未完成"
     demo_switch   || warn "A 段未完成"
     demo_bridge   || warn "B 段未完成"
     demo_crossnet || warn "C 段未完成"
@@ -745,12 +755,13 @@ print_usage() {
     cat <<'EOF'
 用法: bash scripts/run_demo.sh [子命令]
 
+  native    0. 原生 Zenoh API 用法 — 不涉及 ROS2 (可加子命令, 见 run_native.sh)
   switch    A. RMW 切换 — FastDDS / CycloneDDS / Zenoh 同一份代码
   bridge    B. DDS ↔ Zenoh 桥接, 用 REST 从 zenoh 侧观测
   rest      B'. 桥接器常驻的 REST 沙盒 (留给人手动 curl)
   crossnet  C. 跨域/跨网络桥接 — 机器人 domain 0 ⇄ 云 domain 1
   mixed     D. 两种接入方式共存但不互通 (负面结论, 但最有信息量)
-  all       依次跑 switch → bridge → crossnet → mixed
+  all       依次跑 native → switch → bridge → crossnet → mixed
   deps      安装 ros-humble-rmw-zenoh-cpp 与 ros-humble-zenoh-bridge-dds
   build     仅 colcon 编译
   clean     清理 build/install/log
@@ -760,6 +771,7 @@ EOF
 }
 
 case "${1:-switch}" in
+    native)   demo_native "${2:-all}" ;;
     switch)   demo_switch ;;
     bridge)   demo_bridge ;;
     rest)     demo_rest ;;

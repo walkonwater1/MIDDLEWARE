@@ -29,7 +29,9 @@ ROS2 的默认传输是 DDS。DDS 用 **UDP 组播**做发现 (SPDP/SEDP),这在
                   "DDS 我不动, 只把边界那一段桥出去"
 ```
 
-本目录的四个 Demo 就分别覆盖这两种范式,以及它们**混用时会踩的坑**。
+本目录的 Demo 就分别覆盖这两种范式,以及它们**混用时会踩的坑**。
+在进入 ROS2 之前,先有 **Demo 0** —— 用 zenoh-cpp 直接写程序,把 Zenoh 本身的
+pub/sub 与 query 用法跑一遍,不涉及任何 ROS2 概念。
 
 ## Zenoh 核心概念
 
@@ -52,7 +54,7 @@ ROS2 的默认传输是 DDS。DDS 用 **UDP 组播**做发现 (SPDP/SEDP),这在
 |------|--------|------|--------|
 | **换 RMW** | `RMW_IMPLEMENTATION=rmw_zenoh_cpp` + 起 `rmw_zenohd` 路由器 | 新建系统 / 全栈可改 | Demo A、D |
 | **桥接** | 跑 `zenoh_bridge_dds`,DDS 侧零改动 | 已有 ROS2 系统,只需打通边界 | Demo B、C |
-| **原生 API** | 直接链接 zenoh-c/zenoh-cpp 写非 ROS2 程序 | 云端服务、嵌入式端 | 不在本目录 |
+| **原生 API** | 直接链接 zenoh-c/zenoh-cpp 写非 ROS2 程序 | 云端服务、嵌入式端 | **Demo 0(`native_lab/`)** |
 
 ---
 
@@ -93,11 +95,20 @@ ROS2 的默认传输是 DDS。DDS 用 **UDP 组播**做发现 (SPDP/SEDP),这在
 ```
 zenoh/
 ├── README.md                       # 本文档
+├── native_lab/                     # ★ 原生 Zenoh 示例 (zenoh-cpp, 与 ROS2 无关)
+│   ├── CMakeLists.txt                独立 CMake 工程, 复用 rmw_zenoh_cpp 自带的 libzenohc
+│   └── src/
+│       ├── common.hxx                打开 Session / Ctrl-C / 打印工具
+│       ├── z_pub.cpp                 发布端: Config → open → declare_publisher → put
+│       ├── z_sub.cpp                 订阅端: declare_subscriber + 回调
+│       ├── z_queryable.cpp           服务端: declare_queryable + query.reply
+│       └── z_get.cpp                 客户端: get 一次性查询, 收集有限条 reply
 ├── ros2_zenoh_lab/                 # ROS2 包 (★ zenoh/ 是一个独立 colcon 工作区)
 │   └── src/rmw_probe_node.cpp        RMW 无关的自省节点 (Demo A–D 全靠它)
 ├── scripts/
-│   ├── run_demo.sh                 一键编排: switch | bridge | rest | crossnet | mixed | all
-│   ├── rest_probe.sh               从 zenoh 侧观测的 REST/SSE 探针
+│   ├── run_demo.sh                 一键编排: native | switch | bridge | rest | crossnet | mixed | all
+│   ├── run_native.sh               原生 Zenoh 用法: pubsub | query | router | observe | all
+│   └── rest_probe.sh               从 zenoh 侧观测的 REST/SSE 探针
 ├── config/
 │   ├── router_tcp_ipv4.json5       IPv4-only 主机的路由器配置 (回落)
 │   └── session_remote.json5        跨机连远端路由器的会话模板
@@ -113,21 +124,191 @@ bash zenoh/scripts/run_demo.sh deps
 # 1. 编译本目录的 ROS2 包 (zenoh/ 是独立工作区, 不影响 ../ros2/)
 cd zenoh && source /opt/ros/humble/setup.bash && colcon build --packages-select ros2_zenoh_lab
 
-# 2. 依次跑四个 Demo
+# 2. 跑全部 Demo: 先原生 Zenoh (Demo 0), 再 ROS2 的 A→B→C→D
 bash zenoh/scripts/run_demo.sh all
+
+# 只想看原生 Zenoh 用法 (独立 CMake 工程, 不需要 colcon):
+bash zenoh/scripts/run_native.sh all
 ```
 
 单个 Demo:
 
 ```bash
+bash zenoh/scripts/run_demo.sh native     # 0. 原生 Zenoh API (等价于 run_native.sh all)
 bash zenoh/scripts/run_demo.sh switch     # A. RMW 切换
 bash zenoh/scripts/run_demo.sh bridge     # B. DDS ↔ Zenoh 桥接
 bash zenoh/scripts/run_demo.sh crossnet   # C. 跨域桥接
 bash zenoh/scripts/run_demo.sh mixed      # D. 共存但不互通
 ```
 
-> ⚠️ 每次运行请在**干净的 shell** 里,或先 `unset RMW_IMPLEMENTATION ROS_DOMAIN_ID`。
-> 脚本内部会自己清一遍,但你手敲命令时不会。
+`run_native.sh` 的四个子命令: `pubsub`(发布/订阅)、`query`(Query/Queryable)、
+`router`(client 模式连路由器)、`observe`(原生程序看 ROS2 的 zenoh 键)。
+
+> ⚠️ 运行 ROS2 相关的 Demo (A–D) 时请在**干净的 shell** 里,或先
+> `unset RMW_IMPLEMENTATION ROS_DOMAIN_ID`。脚本内部会自己清一遍,
+> 但你手敲命令时不会。原生 Demo 0 不读这些变量,不受影响。
+
+---
+
+## Demo 0 — 原生 Zenoh API:先跑通 Zenoh 本身
+
+Demo A–D 讲的都是"ROS2 怎么用 Zenoh"。如果你还没见过 Zenoh 程序长什么样,
+那些结论会有点悬空。这一节**完全脱离 ROS2** —— 用 zenoh-cpp 写四个小程序:
+
+| 程序 | 演示的 Zenoh 概念 | 对应 DDS 里的东西 |
+|------|------------------|------------------|
+| `z_pub` | `Config` → `Session::open` → `declare_publisher` → `put` | Publisher |
+| `z_sub` | `declare_subscriber` + 回调、key expression 通配 | Subscriber |
+| `z_queryable` | `declare_queryable` → `query.reply` | Service 的服务端 |
+| `z_get` | `get` 一次性查询,收集有限条 reply | Service 的客户端 |
+
+> **不需要为这一节额外安装 Zenoh。** `libzenohc.so` 和 `zenoh.hxx` 已经随
+> `ros-humble-rmw-zenoh-cpp` 装在 `/opt/ros/humble/opt/zenoh_cpp_vendor`,
+> `native_lab/CMakeLists.txt` 直接复用它们。
+
+### 最小骨架:一个 Zenoh 程序只有四步
+
+```cpp
+auto config  = zenoh::Config::create_default();                 // 1. 配置
+auto session = zenoh::Session::open(std::move(config));         // 2. 接入网络
+auto pub     = session.declare_publisher(zenoh::KeyExpr("demo/hello")); // 3. 声明 key
+pub.put(zenoh::Bytes("{\"seq\":1}"));                           // 4. 发一条
+```
+
+订阅端只换后两步:
+
+```cpp
+auto sub = session.declare_subscriber(
+  zenoh::KeyExpr("demo/**"),                       // 通配: demo/ 下任意 key
+  [](zenoh::Sample & s) {                          // 数据到达时在后台线程回调
+    std::cout << s.get_keyexpr().as_string_view()  // 实际命中的 key
+              << " " << s.get_encoding().as_string()
+              << " " << s.get_payload().as_string();
+  },
+  []() {});                                        // on_drop
+```
+
+没有 topic 类型、没有 QoS 协商、没有 domain participant。**key 是任意层级字符串,
+载荷是字节串,encoding 随消息一起走** —— 这就是 Zenoh 的全部出发点。
+
+### N1. 发布 / 订阅 — peer 模式,不需要路由器
+
+```bash
+bash zenoh/scripts/run_native.sh pubsub
+# 或手动: zenoh/native_lab/build/z_sub demo/hello 8 &
+#         zenoh/native_lab/build/z_pub demo/hello 5 15
+```
+
+实测输出(订阅端):
+
+```
+┌─ Zenoh 原生示例 ─────────────────────────────────────
+│ 角色          : 订阅端 (z_sub)
+│ Key expression: demo/hello
+│ 会话模式      : peer (默认组播 scouting, 无需路由器)
+└──────────────────────────────────────────────────────
+[SUB] 已订阅 demo/hello, 等待数据...
+[SUB] #1  key=demo/hello  enc=application/json  payload={"src":"z_pub","seq":0,...}
+[SUB] #2  key=demo/hello  enc=application/json  payload={"src":"z_pub","seq":1,...}
+...
+SUMMARY role=sub key=demo/hello received=15
+```
+
+两个进程都用默认配置:组播 scouting 自动发现对端,**零配置、无中心节点** ——
+这一点和 DDS 很像。区别在下一节:Zenoh 还能主动连出去。
+
+### N2. Query / Queryable — 为什么 `GET` 可能返回空
+
+```bash
+bash zenoh/scripts/run_native.sh query
+```
+
+① 问一个有 queryable 应答的 key:
+
+```
+[GET] reply  key=demo/robot/**  enc=application/json
+             payload={"service":"z_queryable","key":"demo/robot/**",...}
+SUMMARY role=get selector=demo/robot/** replies=1 errors=0
+```
+
+② 负对照 —— 同一个 zenoh 网络里,对一个**只有发布者**的 key 做 GET:
+
+```
+SUMMARY role=get selector=demo/plain replies=0 errors=0
+```
+
+`0` 不是故障。**`get` 是查询,只命中 Queryable;它不会读取 pub/sub 的数据。**
+这和后面 Demo B 里 `curl /rt/**` 返回空是同一件事 ——
+桥接器不存储样本,所以没有 queryable 可命中。
+
+### N3. client 模式 — 主动连路由器
+
+```bash
+bash zenoh/scripts/run_native.sh router
+```
+
+脚本用 ROS2 自带的 `rmw_zenohd` 当路由器(它就是一个标准 Zenoh 1.8.0 router),
+然后让两端都显式连接:
+
+```bash
+zenoh/native_lab/build/z_sub demo/router 8 tcp/localhost:7447
+zenoh/native_lab/build/z_pub demo/router 5 10 tcp/localhost:7447
+```
+
+输出与 N1 相同,但横幅变成:
+
+```
+│ 会话模式      : client, 主动连接 tcp/localhost:7447
+```
+
+差别全在那一行:peer 靠组播发现,**跨不了网段**;client 是"我主动连出去",
+把 `localhost` 换成对端 IP,就穿过了网段 / NAT —— 这正是 DDS 组播做不到的。
+`common.hxx` 里的 `open_session()` 展示了对应的三行配置。
+
+### N4. 原生程序与 ROS2 共用同一张 zenoh 网络
+
+这是最能说明问题的一段:起一个 `rmw_zenoh_cpp` 的 ROS2 发布者,再让原生
+`z_sub` 订阅 `**`:
+
+```bash
+bash zenoh/scripts/run_native.sh observe
+```
+
+实测输出(节选):
+
+```
+[SUB] #1  key=42/native_probe/std_msgs::msg::dds_::String_/TypeHashNotSupported
+          enc=zenoh/bytes
+          payload=\x00\x01\x00\x00p\x00\x00\x00{"rmw":"rmw_zenoh_cpp","label":"ros2_pub",...}
+[SUB] #2  key=42/rosout/rcl_interfaces::msg::dds_::Log_/TypeHashNotSupported
+          ...
+```
+
+三件事同时被证明:
+
+1. **原生 Zenoh 程序和 ROS2 节点确实在同一张网络上** —— 否则收不到任何样本。
+2. **ROS2 话题 `/native_probe` 在 zenoh 上的 key 并不叫 `/native_probe`**,而是
+   `<domain>/<话题>/<类型>/TypeHashNotSupported`。这就是 README 前面"墙二"的
+   现场物证,也是 `rmw_zenoh_cpp` 与 `zenoh_bridge_dds`(用 `/rt/x`)无法互通的根因。
+3. **载荷是 CDR 编码** —— 开头 4 字节 `00 01 00 00` 是 CDR 封装头,后面才是
+   `rmw_probe_node` 发的 JSON 字符串。`encoding` 也如实标成 `zenoh/bytes`,
+   而不是 `application/json`。
+
+### 自己编译 / 直接用
+
+```bash
+# 编译 (结果在 zenoh/native_lab/build/)
+bash zenoh/scripts/run_native.sh build
+
+# 手动跑任意一个, 参数见各 .cpp 头部注释
+zenoh/native_lab/build/z_pub demo/hello 5 20
+zenoh/native_lab/build/z_sub 'demo/**' 8
+zenoh/native_lab/build/z_queryable 'demo/robot/**' 20
+zenoh/native_lab/build/z_get 'demo/robot/**' 2000
+```
+
+四个程序都支持可选的第 4 个参数 `connect_endpoint`(如 `tcp/localhost:7447`),
+传了就切到 client 模式主动连过去。
 
 ---
 
